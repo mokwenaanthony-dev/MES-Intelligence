@@ -1,0 +1,44 @@
+# The shop-floor side of the Unified Namespace, for local development and demos.
+#
+#   docker compose up -d broker            # just the broker (the ERP connects to it)
+#   docker compose up -d                   # broker + MES with simulated PRESS3 and ASSY1
+#   docker compose logs -f mes             # watch work arrive and be reported
+#
+# ERP-Intelligence reaches the broker at mqtt://localhost:1883 (run on the host) or
+# mqtt://host.docker.internal:1883 (its Docker containers).
+services:
+  broker:
+    image: eclipse-mosquitto:2.0.20
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -t '$$SYS/broker/uptime' -C 1 -W 3 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mes:
+    build: .
+    restart: unless-stopped
+    command: >
+      python -m mes run
+      --simulate 1000/1000/assy/l1/press3
+      --simulate 1000/1000/assy/l1/assy1
+      --speed ${SIM_SPEED:-3600}
+      --variance ${SIM_VARIANCE:-0}
+    environment:
+      MQTT_URL: mqtt://broker:1883
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - mes_data:/data
+    depends_on:
+      broker:
+        condition: service_healthy
+
+volumes:
+  mosquitto_data:
+  mes_data:

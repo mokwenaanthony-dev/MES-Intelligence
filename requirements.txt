@@ -1,0 +1,2 @@
+# Runtime dependency (the same range as ERP-Intelligence).
+paho-mqtt>=2.1,<3
