@@ -30,9 +30,8 @@ def test_work_arrives_and_performance_leaves_through_mosquitto():
 
         mes = MES(mes_broker, store)
         mes.start()
-        for _ in range(50):  # the retained request arrives on the network thread
-            if mes.store.queue(cell):
-                break
+        deadline = time.monotonic() + 10  # the retained request arrives on the network thread
+        while not mes.store.queue(cell) and time.monotonic() < deadline:
             time.sleep(0.1)
         [request] = mes.store.queue(cell)
         event_id = mes.report_performance(cell, request, yield_quantity=Decimal("100"))

@@ -7,7 +7,7 @@ from mes.broker import MemoryBroker
 from .erp_messages import REQUEST, REQUEST_TOPIC
 
 
-def test_run_with_a_simulated_press_then_status(tmp_path, capsys):
+def test_run_with_a_simulated_press_then_status(tmp_path, capsys, monkeypatch):
     db = str(tmp_path / "mes.sqlite3")
     broker = MemoryBroker()
     broker.publish(REQUEST_TOPIC, REQUEST, retain=True)
@@ -19,7 +19,9 @@ def test_run_with_a_simulated_press_then_status(tmp_path, capsys):
         """Stop once the simulated press has reported, or after enough checks."""
         return any(t.endswith("operation-performance") for t, _, _ in broker.published) or next(checks, None) is None
 
-    cli.time.sleep = lambda seconds: None  # the main loop's 5 s pause
+    # Skip the main loop's 5 s pause. monkeypatch puts the real time.sleep back after this test;
+    # assigning cli.time.sleep directly would change it for every later test (it broke test_mqtt in CI).
+    monkeypatch.setattr(cli.time, "sleep", lambda seconds: None)
     mes = cli.run(args, broker_factory=lambda: broker, stop=stop)
     mes.store.close()
     assert any(t.endswith("operation-performance") for t, _, _ in broker.published)
