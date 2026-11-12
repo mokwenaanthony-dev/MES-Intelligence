@@ -1,10 +1,12 @@
 # The shop-floor side of the Unified Namespace, for local development and demos.
 #
 #   docker compose up -d broker            # just the broker (the ERP connects to it)
-#   docker compose up -d                   # broker + MES with simulated PRESS3 and ASSY1
-#   docker compose logs -f mes             # watch work arrive and be reported
+#   docker compose up -d                   # broker + MES + PRESS3 (edge agent and simulated PLC)
+#   docker compose logs -f mes edge-press3 # watch work arrive, run on the machine and be reported
 #
-# ERP-Intelligence reaches the broker at mqtt://localhost:1883 (run on the host) or
+# PRESS3 is a machine with an edge agent: the MES dispatches each job to it, the agent drives the
+# (simulated) PLC over Modbus TCP and reports back. ASSY1 is a manual cell worked by the MES's own
+# simulator. ERP-Intelligence reaches the broker at mqtt://localhost:1883 (run on the host) or
 # mqtt://host.docker.internal:1883 (its Docker containers).
 services:
   broker:
@@ -26,8 +28,8 @@ services:
     restart: unless-stopped
     command: >
       python -m mes run
-      --simulate 1000/1000/assy/l1/press3
       --simulate 1000/1000/assy/l1/assy1
+      --dispatch 1000/1000/assy/l1/press3
       --speed ${SIM_SPEED:-3600}
       --variance ${SIM_VARIANCE:-0}
     environment:
@@ -39,6 +41,39 @@ services:
       broker:
         condition: service_healthy
 
+  # Press 3's PLC: 378 machine seconds per part, so 100 parts take the 10.5 hours planned in the ERP.
+  plc-press3:
+    build: ./edge
+    image: mes-edge:local
+    restart: unless-stopped
+    command: ["plc-sim"]
+    environment:
+      PLC_LISTEN: 0.0.0.0:5020
+      PLC_CYCLE_SECONDS: "378"
+      PLC_SPEED: ${SIM_SPEED:-3600}
+      PLC_SCRAP_EVERY: ${PLC_SCRAP_EVERY:-0}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+  # Press 3's edge agent: PLC (Modbus TCP) <-> Unified Namespace (MQTT).
+  edge-press3:
+    build: ./edge
+    image: mes-edge:local
+    restart: unless-stopped
+    command: ["edge-agent"]
+    environment:
+      EDGE_CELL: 1000/1000/assy/l1/press3
+      EDGE_PLC: plc-press3:5020
+      MQTT_URL: mqtt://broker:1883
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - edge_press3:/data
+    depends_on:
+      broker:
+        condition: service_healthy
+      plc-press3:
+        condition: service_started
+
 volumes:
   mosquitto_data:
   mes_data:
+  edge_press3:

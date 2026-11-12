@@ -1,0 +1,28 @@
+# The shop-floor side of MES-Intelligence, written in Rust with the standard library only (ADR 0005):
+#   edge-agent  connects one cell's PLC (Modbus TCP) to the Unified Namespace (MQTT)
+#   plc-sim     a simulated PLC that makes parts, so the agent has a machine to talk to
+[package]
+name = "mes-edge"
+version = "0.2.0"
+edition = "2021"
+rust-version = "1.85"
+description = "Edge agent and simulated PLC for MES-Intelligence: Modbus TCP to MQTT, standard library only"
+license = "MIT"
+publish = false
+
+# No [dependencies] on purpose: no crates to download, audit or keep up to date (ADR 0005).
+
+[lib]
+name = "mes_edge"
+path = "src/lib.rs"
+
+[[bin]]
+name = "edge-agent"
+path = "src/bin/edge_agent.rs"
+
+[[bin]]
+name = "plc-sim"
+path = "src/bin/plc_sim.rs"
+
+[profile.release]
+strip = true

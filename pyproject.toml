@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mes-intelligence"
-version = "0.1.0"
+version = "0.2.0"
 description = "Python MES for the ERP-Intelligence shop floor: ISA-95 Unified Namespace over MQTT"
 readme = "README.md"
 license = "MIT"

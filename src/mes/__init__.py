@@ -6,5 +6,5 @@ and the work released to them from the ERP's retained messages, and reports the 
 ``operation-performance`` events. It keeps working when the ERP is down and resends unanswered
 events until the ERP confirms them (store-and-forward).
 """
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 CONTRACT_VERSION = 1  # the UNS contract version this MES implements

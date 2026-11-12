@@ -106,15 +106,23 @@ class Store:
                       (status, _now(), topic))
 
     def queue(self, cell: str | None = None, status: str = "QUEUED") -> list[dict]:
-        """Requests in a status, oldest start date first (then order and operation)."""
+        """Requests in a status, oldest start date first (then order and operation).
+
+        Each request is the ERP's data plus the MES's own ``topic``, ``cell`` and ``status``. The ERP's
+        data has a ``status`` of its own (the order's, e.g. RELEASED); it is kept as ``order_status``
+        so it cannot hide how far the shop floor has got.
+        """
         sql = "SELECT topic, cell, status, data FROM operation_requests WHERE status = ?"
         params = [status]
         if cell:
             sql += " AND cell = ?"
             params.append(cell)
         rows = self._query(sql, params)
-        requests = [{"topic": r["topic"], "cell": r["cell"], "status": r["status"], **json.loads(r["data"])}
-                    for r in rows]
+        requests = []
+        for row in rows:
+            data = json.loads(row["data"])
+            requests.append({**data, "order_status": data.get("status"), "topic": row["topic"], "cell": row["cell"],
+                             "status": row["status"]})
         return sorted(requests, key=lambda r: (r["start_date"], r["order"], r["operation_number"]))
 
     # --- store-and-forward -------------------------------------------------------------------------
@@ -134,6 +142,11 @@ class Store:
         cursor = self._execute("UPDATE performance_events SET status = ?, result = ? WHERE event_id = ?",
                                (status, json.dumps(result), event_id))
         return cursor.rowcount == 1
+
+    def event(self, event_id: str) -> dict | None:
+        """One recorded event (with its exact payload), or None."""
+        rows = self._query("SELECT * FROM performance_events WHERE event_id = ?", (event_id,))
+        return rows[0] if rows else None
 
     def pending_events(self, sent_before: str | None = None) -> list[dict]:
         """Events still waiting for an answer, optionally only those last sent before a time."""

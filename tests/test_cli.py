@@ -1,6 +1,8 @@
 """The ``python -m mes`` command line, end to end with the in-memory broker."""
 import json
 
+import pytest
+
 from mes import __main__ as cli
 from mes.broker import MemoryBroker
 
@@ -37,3 +39,19 @@ def test_settings_come_from_the_environment(monkeypatch):
     args = cli.build_parser().parse_args(["run"])
     assert (args.mqtt_url, args.db, args.simulate, args.speed) == ("mqtt://plant-broker:1883", "/data/mes.sqlite3",
                                                                    [], 3600)
+
+
+def test_dispatch_option_and_its_conflict_with_simulate(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli.time, "sleep", lambda seconds: None)
+    broker = MemoryBroker()
+    broker.publish(REQUEST_TOPIC, REQUEST, retain=True)
+    db = str(tmp_path / "mes.sqlite3")
+    args = cli.build_parser().parse_args(["--db", db, "run", "--dispatch", "1000/1000/assy/l1/press3"])
+    stops = iter([False, True])
+    mes = cli.run(args, broker_factory=lambda: broker, stop=lambda: next(stops))
+    mes.store.close()
+    assert "1000/1000/assy/l1/press3/schedule/current-job" in broker.retained
+
+    both = cli.build_parser().parse_args(["--db", db, "run", "--simulate", "a/b/c/d/e", "--dispatch", "a/b/c/d/e"])
+    with pytest.raises(SystemExit, match="not both"):
+        cli.run(both, broker_factory=MemoryBroker, stop=lambda: True)

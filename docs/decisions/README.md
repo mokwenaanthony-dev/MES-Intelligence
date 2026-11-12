@@ -12,3 +12,5 @@ these records cover the MES's own choices.
 | [0002](0002-the-erp-owns-the-plan-the-mes-owns-the-execution.md) | The ERP owns the plan, the MES owns the execution | Accepted |
 | [0003](0003-sqlite-and-plain-sql.md) | A local SQLite database, written with plain SQL | Accepted |
 | [0004](0004-simulator-before-the-edge-agent.md) | A machine simulator first, the Rust edge agent next | Accepted |
+| [0005](0005-std-only-rust-edge-agent-over-modbus.md) | A Rust edge agent with the standard library only, talking Modbus TCP | Accepted |
+| [0006](0006-the-mes-dispatches-and-the-edge-reports-state.md) | The MES dispatches; the edge agent reports retained state | Accepted |
