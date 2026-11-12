@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+.coverage
+htmlcov/
+.pytest_cache/
+# The MES's local database and anything the broker writes
+*.sqlite3
+mosquitto/data/
+mosquitto/log/
+.env
+# Scratch files
+ci_failure.txt
+compose*.txt

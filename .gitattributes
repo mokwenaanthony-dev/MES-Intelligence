@@ -1,0 +1,3 @@
+# Store text with LF line endings in the repository, whatever the operating system (guide 3.25).
+* text=auto eol=lf
+*.png binary

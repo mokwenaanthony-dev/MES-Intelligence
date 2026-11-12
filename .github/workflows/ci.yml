@@ -1,0 +1,49 @@
+# Verification gates, the same order as ERP-Intelligence:
+# lint -> SAST -> dependency audit -> tests with coverage >= 80% (against a real Mosquitto) -> Docker build
+name: MES CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      MQTT_URL: mqtt://localhost:1883   # turns on tests/test_mqtt.py
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      # Not a service container: Mosquitto 2 only accepts remote clients with a config file, and
+      # service containers cannot be given a command. The image ships a no-auth config for testing.
+      - name: Start MQTT broker (Mosquitto)
+        run: docker run -d --name mosquitto -p 1883:1883 eclipse-mosquitto:2.0.20 mosquitto -c /mosquitto-no-auth.conf
+
+      - name: Lint (flake8)
+        run: flake8 .
+
+      - name: Static security scan (bandit)
+        run: bandit -r src -ll
+
+      - name: Dependency vulnerability audit (pip-audit)
+        run: pip-audit -r requirements.txt
+
+      - name: Tests with coverage floor
+        run: pytest
+
+  docker:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t mes-intelligence:ci .
