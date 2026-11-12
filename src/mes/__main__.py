@@ -8,7 +8,11 @@ Settings come from the command line or the environment:
 Examples::
 
     python -m mes run --simulate 1000/1000/assy/l1/press3 --simulate 1000/1000/assy/l1/assy1
+    python -m mes run --simulate 1000/1000/assy/l1/assy1 --dispatch 1000/1000/assy/l1/press3
     python -m mes status
+
+``--simulate`` cells are worked by the MES's own machine simulator; ``--dispatch`` cells have an edge
+agent (``edge/`` in this repository) that runs each job on the machine and reports back.
 """
 import argparse
 import json
@@ -33,6 +37,8 @@ def build_parser() -> argparse.ArgumentParser:
     run = commands.add_parser("run", help="run the MES (Ctrl+C stops it)")
     run.add_argument("--simulate", action="append", default=[], metavar="CELL_PATH",
                      help="simulate the machine at this cell, e.g. 1000/1000/assy/l1/press3 (repeatable)")
+    run.add_argument("--dispatch", action="append", default=[], metavar="CELL_PATH",
+                     help="dispatch jobs to the edge agent of this cell (repeatable)")
     run.add_argument("--speed", type=float, default=3600, help="simulated seconds per real second (default 3600)")
     run.add_argument("--variance", type=float, default=0.0, help="random +/- share of planned activity, e.g. 0.1")
     commands.add_parser("status", help="show cells, queue and events from the local database")
@@ -47,8 +53,13 @@ def run(args, broker_factory=None, stop=None) -> MES:
         def broker_factory():
             """A persistent session, so messages for the MES wait on the broker while it is stopped."""
             return MqttBroker(args.mqtt_url, client_id="mes-intelligence", persistent=True)
-    mes = MES(broker_factory(), Store(args.db))
+    both = set(args.simulate) & set(args.dispatch)
+    if both:
+        raise SystemExit("A cell is either simulated or dispatched to an edge agent, not both: "
+                         + ", ".join(sorted(both)))
+    mes = MES(broker_factory(), Store(args.db), dispatch_cells=args.dispatch)
     mes.start()
+    mes.dispatch_all()
     threads = []
     for cell in args.simulate:
         simulator = MachineSimulator(mes, cell, speed=args.speed, variance=args.variance)
@@ -59,6 +70,7 @@ def run(args, broker_factory=None, stop=None) -> MES:
     try:
         while not (stop and stop()):
             mes.resend_pending()
+            mes.dispatch_all()
             time.sleep(5)
     except KeyboardInterrupt:
         logging.getLogger(__name__).info("Stopping")

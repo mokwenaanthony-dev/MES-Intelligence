@@ -1,5 +1,7 @@
 # Verification gates, the same order as ERP-Intelligence:
-# lint -> SAST -> dependency audit -> tests with coverage >= 80% (against a real Mosquitto) -> Docker build
+#   verify  Python MES: lint -> SAST -> dependency audit -> tests with coverage >= 80% (against a real Mosquitto)
+#   edge    Rust edge agent: format -> clippy (warnings are errors, docs required) -> tests (against Mosquitto)
+#   docker  both images build
 name: MES CI
 
 on:
@@ -40,10 +42,41 @@ jobs:
       - name: Tests with coverage floor
         run: pytest
 
+  edge:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: edge
+    env:
+      MQTT_URL: mqtt://localhost:1883   # turns on the Mosquitto tests in edge/tests/end_to_end.rs
+    steps:
+      - uses: actions/checkout@v4
+
+      # The runner image ships rustup; the crate has no dependencies, so nothing else is downloaded.
+      - name: Rust toolchain (stable, rustfmt, clippy)
+        run: rustup toolchain install stable --profile minimal --component rustfmt,clippy && rustup default stable
+
+      - name: Start MQTT broker (Mosquitto)
+        run: docker run -d --name mosquitto -p 1883:1883 eclipse-mosquitto:2.0.20 mosquitto -c /mosquitto-no-auth.conf
+
+      - name: Format (rustfmt)
+        run: cargo fmt --check
+
+      - name: Lint (clippy, warnings are errors)
+        run: cargo clippy --all-targets --locked -- -D warnings
+
+      - name: Tests (unit, end to end, against Mosquitto)
+        run: cargo test --locked
+
   docker:
-    needs: verify
+    needs: [verify, edge]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build image
+      - name: Build the MES image
         run: docker build -t mes-intelligence:ci .
+      - name: Build the edge image (agent and simulated PLC)
+        run: docker build -t mes-edge:ci edge
+      # Both languages together: Mosquitto, the Python MES, the Rust edge agent and the PLC.
+      - name: End to end with Docker Compose
+        run: bash scripts/e2e.sh

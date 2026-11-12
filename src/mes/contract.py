@@ -22,6 +22,12 @@ RESULT_SUBSCRIPTION = "+/+/erp/events/confirmation-result"
 
 STATES = ("RUNNING", "IDLE", "SETUP", "DOWN", "OFFLINE")
 
+# Level 2/3 messages between the MES and its edge agents (``docs/EDGE_CONTRACT.md`` here). They live
+# in the same namespace, but they are not part of the ERP contract: the ERP never reads them.
+JOB = "job/v1"                    # MES -> edge, retained at <cell>/schedule/current-job
+JOB_PROGRESS = "job-progress/v1"  # edge -> MES, retained at <cell>/state/job
+JOB_PROGRESS_SUBSCRIPTION = "+/+/+/+/+/state/job"
+
 
 def cell_path(topic: str) -> str:
     """The cell part of an equipment-level topic: the first five levels."""
@@ -36,6 +42,16 @@ def performance_topic(cell: str) -> str:
 def state_topic(cell: str) -> str:
     """Where a cell's current state is kept (retained)."""
     return f"{cell}/state/status"
+
+
+def current_job_topic(cell: str) -> str:
+    """Where the MES tells a cell's edge agent which job to run (retained; empty = none)."""
+    return f"{cell}/schedule/current-job"
+
+
+def job_progress_topic(cell: str) -> str:
+    """Where a cell's edge agent reports how far it has got with the job (retained)."""
+    return f"{cell}/state/job"
 
 
 def _default(value):

@@ -4,11 +4,14 @@ __pycache__/
 venv/
 *.egg-info/
 build/
+# Rust build output
+edge/target/
 .coverage
 htmlcov/
 .pytest_cache/
-# The MES's local database and anything the broker writes
+# The MES's local database, the edge agent's state file and anything the broker writes
 *.sqlite3
+edge-state.txt
 mosquitto/data/
 mosquitto/log/
 .env
