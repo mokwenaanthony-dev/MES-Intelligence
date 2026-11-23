@@ -1,0 +1,13 @@
+{
+  "schema": "equipment-state/v1",
+  "event_id": null,
+  "timestamp": "2026-06-01T18:30:00.000+00:00",
+  "source": "mes-edge/press3",
+  "data": {
+    "state": "IDLE",
+    "order": null,
+    "operation_number": null,
+    "since": "2026-06-01T18:30:00.000+00:00",
+    "session": "press3-2026-06-01T07:59:58.000+00:00"
+  }
+}

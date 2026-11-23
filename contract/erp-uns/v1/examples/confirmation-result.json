@@ -1,0 +1,15 @@
+{
+  "schema": "confirmation-result/v1",
+  "event_id": "press3-2026-06-01T10:15:00Z-0001",
+  "timestamp": "2026-06-01T10:15:01+02:00",
+  "source": "erp-intelligence",
+  "data": {
+    "event_id": "press3-2026-06-01T10:15:00Z-0001",
+    "status": "POSTED",
+    "order": "MO00000001",
+    "confirmation_number": "0001",
+    "journal_entry": "PC00000001",
+    "reason": null,
+    "replayed": false
+  }
+}

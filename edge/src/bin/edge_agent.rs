@@ -12,6 +12,8 @@
 //! | `--mqtt-url` | `MQTT_URL` | `mqtt://localhost:1883` | the broker (credentials allowed, never logged) |
 //! | `--state-file` | `EDGE_STATE_FILE` | `edge-state.txt` | remembers the current job across restarts |
 //! | `--poll-ms` | `EDGE_POLL_MS` | `500` | how often the PLC is read |
+//! | `--heartbeat-s` | `EDGE_HEARTBEAT_S` | `60` | an unchanged cell state is published again this often (0: only changes) |
+//! | `--stall-after-s` | `EDGE_STALL_AFTER_S` | `60` | a RUNNING PLC whose counters do not move this long is reported OFFLINE (0: off) |
 //!
 //! The MQTT session is persistent (client id `mes-edge-<cell code>`), and the broker publishes the
 //! cell as OFFLINE if the agent dies (last will). Stop it with Ctrl+C or `docker stop`.
@@ -33,7 +35,7 @@ fn setting(args: &[String], flag: &str, env: &str) -> Option<String> {
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.iter().any(|a| a == "--help" || a == "-h") {
-        println!("edge-agent --cell PATH [--plc HOST:PORT] [--unit N] [--mqtt-url URL] [--state-file FILE] [--poll-ms N]");
+        println!("edge-agent --cell PATH [--plc HOST:PORT] [--unit N] [--mqtt-url URL] [--state-file FILE] [--poll-ms N] [--heartbeat-s N] [--stall-after-s N]");
         return;
     }
     mes_edge::log::set_level(&std::env::var("LOG_LEVEL").unwrap_or_else(|_| "INFO".into()));
@@ -58,6 +60,15 @@ fn main() {
     let poll_ms: u64 = setting(&args, "--poll-ms", "EDGE_POLL_MS")
         .and_then(|p| p.parse().ok())
         .unwrap_or(500);
+    let seconds = |flag: &str, env: &str| -> Duration {
+        Duration::from_secs(
+            setting(&args, flag, env)
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(60),
+        )
+    };
+    let heartbeat = seconds("--heartbeat-s", "EDGE_HEARTBEAT_S");
+    let stall_after = seconds("--stall-after-s", "EDGE_STALL_AFTER_S");
 
     let code = cell.rsplit('/').next().unwrap_or("cell").to_string();
     let mut options =
@@ -75,6 +86,8 @@ fn main() {
         cell,
         state_file,
         progress_interval: Duration::from_secs(1),
+        heartbeat,
+        stall_after,
     });
     let mut machine = ModbusMachine::new(&plc, unit);
     agent::run(

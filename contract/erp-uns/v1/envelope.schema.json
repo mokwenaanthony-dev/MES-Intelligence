@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mokwenaanthony-dev/ERP-Intelligence/contract/uns/v1/envelope.schema.json",
+  "title": "UNS message envelope, contract version 1",
+  "description": "Every payload on the Unified Namespace is UTF-8 JSON in this envelope (docs/UNS_CONTRACT.md, section 3). Each message schema in this folder refines it. Unknown properties are allowed, because adding an optional field is not a version change (section 5).",
+  "type": "object",
+  "required": ["schema", "timestamp", "source", "data"],
+  "properties": {
+    "schema": {
+      "description": "The message type and its version, e.g. operation-performance/v1. A consumer ignores schemas it does not know.",
+      "type": "string",
+      "pattern": "^[a-z][a-z-]*/v[0-9]+$"
+    },
+    "event_id": {
+      "description": "The idempotency key (ADR 0010). Required on events, optional (null) on retained state.",
+      "type": ["string", "null"],
+      "maxLength": 64
+    },
+    "timestamp": {"$ref": "#/$defs/dateTime"},
+    "source": {
+      "description": "Who published the message, e.g. erp-intelligence, mes-intelligence, mes-edge/press3.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "data": {"type": "object"}
+  },
+  "$defs": {
+    "decimal": {
+      "description": "An amount or quantity as an exact decimal string, never a JSON number (ADR 0008).",
+      "type": "string",
+      "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+    },
+    "quantity": {
+      "description": "A quantity that cannot be negative, as an exact decimal string.",
+      "type": "string",
+      "pattern": "^[0-9]+(\\.[0-9]+)?$"
+    },
+    "date": {
+      "description": "An ISO 8601 calendar date.",
+      "type": "string",
+      "format": "date",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "dateTime": {
+      "description": "An ISO 8601 date-time with its offset from UTC (Z or +02:00).",
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$"
+    },
+    "code": {
+      "description": "An ERP code (company code, plant, area, line, work centre, cost centre, activity type).",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 10
+    },
+    "documentNumber": {
+      "description": "An ERP document number, e.g. MO00000001.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 20
+    },
+    "operationNumber": {
+      "description": "An operation of a routing or order, e.g. 10. Topics write it with four digits (0010).",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9999
+    },
+    "event": {
+      "description": "An event, not state: never retained, and its event_id is required.",
+      "required": ["event_id"],
+      "properties": {"event_id": {"type": "string", "minLength": 1}}
+    }
+  }
+}

@@ -189,7 +189,11 @@ impl Progress {
 }
 
 /// The `data` object of an `equipment-state/v1` message (ERP contract v1).
-pub fn state_data(state: &str, job: Option<(&str, i64)>, since: &str) -> Value {
+///
+/// `session` names the agent's broker connection (MES 0.2.1, like Sparkplug's bdSeq): the same in
+/// every report and in the last will registered for that connection, so the ERP can tell a late will
+/// of an earlier connection from the current one (ERP v0.23.1, an optional field of contract v1).
+pub fn state_data(state: &str, job: Option<(&str, i64)>, since: &str, session: &str) -> Value {
     let (order, operation) = match job {
         Some((order, operation)) => (Value::str(order), Value::int(operation)),
         None => (Value::Null, Value::Null),
@@ -199,6 +203,7 @@ pub fn state_data(state: &str, job: Option<(&str, i64)>, since: &str) -> Value {
         ("order", order),
         ("operation_number", operation),
         ("since", Value::str(since)),
+        ("session", Value::str(session)),
     ])
 }
 
@@ -299,10 +304,10 @@ mod tests {
             message.get("source").and_then(Value::as_str),
             Some("mes-edge/press3")
         );
-        let state = state_data("RUNNING", Some(("MO1", 10)), "t");
+        let state = state_data("RUNNING", Some(("MO1", 10)), "t", "press3-s");
         assert_eq!(
             state.to_json(),
-            r#"{"state":"RUNNING","order":"MO1","operation_number":10,"since":"t"}"#
+            r#"{"state":"RUNNING","order":"MO1","operation_number":10,"since":"t","session":"press3-s"}"#
         );
     }
 }

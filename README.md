@@ -36,10 +36,12 @@ Level 1  PLC (simulated)       registers: command, target │ state, good, scrap
 | **Simulated PLC** | `plc-sim`: a Modbus TCP server with a register map, a part counter, cycle time, speed and scrap rate | 0.2.0 |
 | **No dependencies** | The Rust crate uses the standard library only: its own MQTT 3.1.1 client, JSON parser, Modbus TCP and ISO 8601 dates, each tested against its specification | 0.2.0 |
 | Troubleshooting | Python and Rust log the same way: time, level, thread, module, file and **line number**; a bad message is logged and skipped, never stops anything | 0.1.0, 0.2.0 |
+| **Freshness** | One `session` per broker connection in every state report and in a last will built for that connection; a heartbeat repeats an unchanged state every 60 s; a RUNNING PLC whose counters stop moving is reported OFFLINE ([ADR 0007](docs/decisions/0007-a-value-is-only-as-good-as-its-freshness.md)) | 0.2.1 |
+| **Contract checked** | The ERP's JSON Schemas pinned in `contract/erp-uns/v1/` (checksums verified); every message the MES publishes to the ERP, and the edge agent's messages (pinned in `edge/tests/golden/`), checked against them | 0.2.1 |
 | Quality gates | Python: flake8, bandit, pip-audit, pytest (coverage at least 80 %) and a documentation test. Rust: rustfmt, clippy with warnings as errors and `missing_docs`, unit tests, end-to-end tests. Both against a real Mosquitto in CI, and both Docker images built | 0.1.0, 0.2.0 |
 
-Next: live cell state on ERP-Intelligence's knowledge graph (the graph's `Cell` nodes take the
-retained `state/status`).
+Next: a quality field on states (a contract change with the ERP), a last will for the Python MES's
+simulated cells, and the ERP marking a state stale from its age now that the heartbeat exists.
 
 ## Run the full demo
 
@@ -136,8 +138,11 @@ edge/               the edge agent and the simulated PLC (Rust, standard library
   src/messages.rs   the edge contract's messages
   src/time.rs       ISO 8601 from the system clock (days-to-civil-date algorithm)
   src/log.rs        log lines with file and line number
-  tests/            end to end over TCP: test broker or Mosquitto, simulated PLC, agent
-tests/              the ERP contract's example messages, scenarios on the in-memory broker, edge flow
+  tests/            end to end over TCP (test broker or Mosquitto, simulated PLC, agent); golden.rs
+                    pins the agent's ERP-contract messages to the files in tests/golden/
+contract/erp-uns/   the ERP's UNS contract as JSON Schema files, pinned at the release in PINNED
+tests/              the ERP contract's example messages, scenarios on the in-memory broker, edge flow,
+                    and test_contract_schemas.py: everything published checked against the pinned schemas
 docs/               the edge contract and the decision records
 ```
 

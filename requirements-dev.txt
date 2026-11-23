@@ -2,6 +2,8 @@
 # The package itself, editable, so `python -m mes` and the tests find it.
 -e .
 pytest>=8,<9
+# The ERP contract's JSON Schemas (tests/test_contract_schemas.py); referencing comes with it.
+jsonschema>=4.23,<5
 pytest-cov>=6,<7
 flake8>=7,<8
 bandit>=1.8,<2

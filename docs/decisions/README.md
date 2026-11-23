@@ -14,3 +14,4 @@ these records cover the MES's own choices.
 | [0004](0004-simulator-before-the-edge-agent.md) | A machine simulator first, the Rust edge agent next | Accepted |
 | [0005](0005-std-only-rust-edge-agent-over-modbus.md) | A Rust edge agent with the standard library only, talking Modbus TCP | Accepted |
 | [0006](0006-the-mes-dispatches-and-the-edge-reports-state.md) | The MES dispatches; the edge agent reports retained state | Accepted |
+| [0007](0007-a-value-is-only-as-good-as-its-freshness.md) | A value is only as good as its freshness: sessions, a heartbeat, frozen values and a checked contract | Accepted |

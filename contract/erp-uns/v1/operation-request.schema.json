@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mokwenaanthony-dev/ERP-Intelligence/contract/uns/v1/operation-request.schema.json",
+  "title": "operation-request/v1",
+  "description": "One operation of a released order, waiting at the cell that performs it. Published by the ERP, retained at <cell path>/schedule/operation-requests/<order>-<operation>; an empty payload clears it when the order is completed or cancelled.",
+  "allOf": [{"$ref": "envelope.schema.json"}],
+  "properties": {
+    "schema": {"const": "operation-request/v1"},
+    "data": {
+      "type": "object",
+      "required": ["order", "operation_number", "description", "material", "material_description",
+                   "quantity", "unit", "start_date", "finish_date", "status", "planned_activities"],
+      "properties": {
+        "order": {"$ref": "envelope.schema.json#/$defs/documentNumber"},
+        "operation_number": {"$ref": "envelope.schema.json#/$defs/operationNumber"},
+        "description": {"type": "string"},
+        "material": {"type": "string", "minLength": 1, "maxLength": 18},
+        "material_description": {"type": "string"},
+        "quantity": {"$ref": "envelope.schema.json#/$defs/quantity"},
+        "unit": {"type": "string", "minLength": 1, "maxLength": 3},
+        "start_date": {"$ref": "envelope.schema.json#/$defs/date"},
+        "finish_date": {"$ref": "envelope.schema.json#/$defs/date"},
+        "status": {"const": "RELEASED"},
+        "planned_activities": {
+          "description": "Planned quantity per activity type, e.g. {\"LAB\": \"10.000\"}.",
+          "type": "object",
+          "propertyNames": {"$ref": "envelope.schema.json#/$defs/code"},
+          "additionalProperties": {"$ref": "envelope.schema.json#/$defs/quantity"}
+        }
+      }
+    }
+  }
+}

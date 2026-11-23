@@ -6,7 +6,7 @@ agreement **inside the shop floor**, between the MES and the edge agents next to
 (Level 2). The messages share the namespace and the envelope, but the ERP never reads them, so they
 can change without a change to the ERP contract.
 
-> Status: **version 1, MES 0.2.0**. Implemented in `src/mes/core.py` (MES) and `edge/src/messages.rs`
+> Status: **version 1, MES 0.2.0**; sessions, heartbeat and frozen values since MES 0.2.1. Implemented in `src/mes/core.py` (MES) and `edge/src/messages.rs`
 > (agent); `tests/test_edge.py` builds the agent's messages exactly as the Rust code writes them.
 
 ## Who does what
@@ -69,6 +69,17 @@ to three decimals.
 As in ERP contract v1. The agent maps the PLC: running → `RUNNING`, idle or complete → `IDLE`,
 fault → `DOWN`, unreachable → `OFFLINE`. The agent's MQTT **last will** is an `OFFLINE` state, so the
 broker reports the cell offline if the agent dies.
+
+Since MES 0.2.1 ([ADR 0007](decisions/0007-a-value-is-only-as-good-as-its-freshness.md)):
+
+- **`session`** names the agent's broker connection (`press3-2026-06-01T07:59:58.000+00:00`), the
+  same in every report and in the last will registered for that connection. The will is built
+  afresh before every connection, so it is stamped when that connection was made.
+- **Heartbeat:** an unchanged state is published again every `--heartbeat-s` (default 60 s), same
+  `since`, new `timestamp`. A retained state older than a few heartbeats means the agent is not there.
+- **Frozen values:** a `RUNNING` PLC whose counters have not moved for `--stall-after-s` (default
+  60 s) is reported `OFFLINE`, and `RUNNING` again when they move.
+- The exact messages are pinned in `edge/tests/golden/` and checked against the ERP's schemas.
 
 ## The flow
 

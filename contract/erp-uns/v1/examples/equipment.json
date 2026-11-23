@@ -1,0 +1,22 @@
+{
+  "schema": "equipment/v1",
+  "event_id": null,
+  "timestamp": "2026-06-01T08:00:00+02:00",
+  "source": "erp-intelligence",
+  "data": {
+    "company_code": "1000",
+    "plant": "1000",
+    "area": "ASSY",
+    "line": "L1",
+    "work_center": "PRESS3",
+    "name": "Press 3",
+    "isa95_level": "WorkCell",
+    "cost_center": "4000",
+    "activity_types": [
+      "LAB",
+      "MACH"
+    ],
+    "is_active": true,
+    "uns_path": "1000/1000/assy/l1/press3"
+  }
+}
