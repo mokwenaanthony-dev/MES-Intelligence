@@ -1,0 +1,15 @@
+{
+  "schema": "confirmation-result/v1",
+  "event_id": "press3-2026-06-01T11:00:00Z-0002",
+  "timestamp": "2026-06-01T11:00:01+02:00",
+  "source": "erp-intelligence",
+  "data": {
+    "event_id": "press3-2026-06-01T11:00:00Z-0002",
+    "status": "REJECTED",
+    "order": "MO00000002",
+    "confirmation_number": null,
+    "journal_entry": null,
+    "reason": "Order MO00000002: only released orders can be confirmed (status CREATED).",
+    "replayed": false
+  }
+}

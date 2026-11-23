@@ -19,6 +19,17 @@
 //! * the PLC or the broker disappears: the agent says OFFLINE (or the broker publishes its last
 //!   will) and picks up where it was when they come back.
 //!
+//! A value on a screen is only worth something if it is known to be current (MES 0.2.1, ADR 0007):
+//!
+//! * **one session per connection**: every connection gets a new `session`, sent in every state
+//!   report and in the last will registered for that connection, which is built afresh each time.
+//!   The first version built the will once at start-up, so its timestamp was hours old when the
+//!   broker published it, and the ERP discarded it as an old report (fixed there in v0.23.1);
+//! * **a heartbeat**: an unchanged state is published again every `heartbeat`, with a new timestamp,
+//!   so a consumer can tell a steady cell from a silent one by the age of its retained state;
+//! * **frozen values**: a PLC that says RUNNING while none of its counters (good, scrap, run time)
+//!   has moved for `stall_after` cannot be trusted, so the cell is reported OFFLINE until they move.
+//!
 //! The agent never decides what to make. The MES (Level 3) dispatches; the agent (Level 2) executes
 //! and reports. The MES turns a COMPLETE report into the ERP's operation-performance event.
 
@@ -118,6 +129,10 @@ pub struct Config {
     pub state_file: PathBuf,
     /// Least time between two RUNNING progress messages (COMPLETE is always sent at once).
     pub progress_interval: Duration,
+    /// An unchanged cell state is published again after this long (zero: only changes are sent).
+    pub heartbeat: Duration,
+    /// A RUNNING PLC whose counters have not moved for this long is reported OFFLINE (zero: off).
+    pub stall_after: Duration,
 }
 
 impl Config {
@@ -137,9 +152,17 @@ pub struct Agent {
     wanted: Option<Job>,
     /// The job the PLC is working on (or finished), as last saved in the state file.
     saved: Option<Progress>,
-    /// The last cell state published: (state, order, operation).
+    /// The last cell state published: (state, order, operation), and when.
     last_state: Option<(String, Option<String>, Option<i64>)>,
+    last_state_at: Option<Instant>,
     since: String,
+    /// The current broker connection's name, in every state report and in its last will.
+    session: String,
+    /// The PLC's counters (good, scrap, run seconds) while RUNNING, since when they have not moved,
+    /// and whether they are taken as frozen.
+    last_counters: Option<(u32, u32, u32)>,
+    counters_since: Instant,
+    frozen: bool,
     /// The last progress published, and when.
     last_progress: Option<Progress>,
     last_progress_at: Option<Instant>,
@@ -187,7 +210,12 @@ impl Agent {
             wanted: None,
             saved,
             last_state: None,
+            last_state_at: None,
             since: crate::time::now_iso(),
+            session: String::new(),
+            last_counters: None,
+            counters_since: Instant::now(),
+            frozen: false,
             last_progress: None,
             last_progress_at: None,
             connected_at: Instant::now(),
@@ -200,17 +228,38 @@ impl Agent {
         messages::current_job_topic(&self.config.cell)
     }
 
-    /// The message the broker should publish if the agent dies: the cell is OFFLINE.
+    /// The message the broker should publish if the agent dies: the cell is OFFLINE, in this session.
     pub fn last_will(&self) -> mqtt::Will {
+        let now = crate::time::now_iso();
         mqtt::Will {
             topic: messages::state_topic(&self.config.cell),
             payload: messages::envelope(
                 messages::EQUIPMENT_STATE,
                 &self.config.source(),
-                messages::state_data("OFFLINE", None, &crate::time::now_iso()),
+                messages::state_data("OFFLINE", None, &now, &self.session),
             ),
             retain: true,
         }
+    }
+
+    /// Start a new session for the next connection and return the last will to register with it.
+    ///
+    /// Called before every connection attempt, so the will names the connection it belongs to and is
+    /// stamped when that connection was made, never at start-up.
+    pub fn begin_session(&mut self) -> mqtt::Will {
+        let code = self
+            .config
+            .cell
+            .rsplit('/')
+            .next()
+            .unwrap_or(&self.config.cell);
+        self.session = format!("{code}-{}", crate::time::now_iso());
+        self.last_will()
+    }
+
+    /// The current session (empty before the first connection).
+    pub fn session(&self) -> &str {
+        &self.session
     }
 
     /// After a (re)connection: publish everything again, the broker may have lost it.
@@ -267,8 +316,12 @@ impl Agent {
             job.map(|j| j.0.to_string()),
             job.map(|j| j.1),
         );
-        if self.last_state.as_ref() == Some(&key) {
-            return Ok(()); // report by exception: only changes are published
+        let heartbeat_due = !self.config.heartbeat.is_zero()
+            && self
+                .last_state_at
+                .is_none_or(|at| at.elapsed() >= self.config.heartbeat);
+        if self.last_state.as_ref() == Some(&key) && !heartbeat_due {
+            return Ok(()); // report by exception: only changes, and the heartbeat, are published
         }
         if self.last_state.as_ref().map(|s| &s.0) != Some(&key.0) {
             self.since = crate::time::now_iso();
@@ -276,11 +329,14 @@ impl Agent {
         let payload = messages::envelope(
             messages::EQUIPMENT_STATE,
             &self.config.source(),
-            messages::state_data(state, job, &self.since),
+            messages::state_data(state, job, &self.since, &self.session),
         );
         bus.publish(&messages::state_topic(&self.config.cell), &payload, true)?;
-        info!("Cell state {state}");
+        if self.last_state.as_ref() != Some(&key) {
+            info!("Cell state {state}"); // the heartbeat is not logged: it repeats what is known
+        }
         self.last_state = Some(key);
+        self.last_state_at = Some(Instant::now());
         Ok(())
     }
 
@@ -312,6 +368,9 @@ impl Agent {
                 return self.publish_state(bus, "OFFLINE", None);
             }
         };
+        if self.is_frozen(&reading) {
+            return self.publish_state(bus, "OFFLINE", None); // its values cannot be trusted
+        }
         match self.reconcile(bus, machine, reading) {
             Ok(()) => Ok(()),
             Err(Failure::Bus(e)) => Err(e), // let the caller reconnect
@@ -320,6 +379,38 @@ impl Agent {
                 Ok(())
             }
         }
+    }
+
+    /// Whether a RUNNING PLC's counters have stood still for `stall_after`: a frozen value looks
+    /// exactly like a steady one, so only its not moving gives it away. A running machine always
+    /// counts run time, so any healthy reading changes every second.
+    fn is_frozen(&mut self, reading: &Reading) -> bool {
+        if self.config.stall_after.is_zero() || reading.state != State::Running {
+            self.last_counters = None;
+            self.frozen = false;
+            return false;
+        }
+        let counters = (reading.good, reading.scrap, reading.run_seconds);
+        if self.last_counters != Some(counters) {
+            if self.frozen {
+                info!("PLC counters move again: the cell is trusted again");
+            }
+            self.last_counters = Some(counters);
+            self.counters_since = Instant::now();
+            self.frozen = false;
+            return false;
+        }
+        if self.counters_since.elapsed() < self.config.stall_after {
+            return false;
+        }
+        if !self.frozen {
+            warning!(
+                "PLC says RUNNING but no counter has moved for {}s: its values cannot be trusted, cell reported OFFLINE",
+                self.counters_since.elapsed().as_secs()
+            );
+            self.frozen = true;
+        }
+        true
     }
 
     fn reconcile(
@@ -432,9 +523,10 @@ pub fn run(
     stop: &dyn Fn() -> bool,
 ) {
     let mut options = options;
-    options.will = Some(agent.last_will());
     let mut backoff = Duration::from_secs(1);
     while !stop() {
+        // A new session and a fresh will for every connection (see the module documentation).
+        options.will = Some(agent.begin_session());
         let mut client = match mqtt::Client::connect(&options) {
             Ok(client) => client,
             Err(e) => {
@@ -454,6 +546,7 @@ pub fn run(
             "Connected to broker {}:{} as {}",
             options.host, options.port, options.client_id
         );
+        info!("Session {}", agent.session());
         agent.connected();
         let result = (|| -> io::Result<()> {
             client.subscribe(&agent.subscription())?;
@@ -562,6 +655,8 @@ mod tests {
             cell: CELL.into(),
             state_file: dir.join("edge-state.txt"),
             progress_interval: Duration::ZERO,
+            heartbeat: Duration::ZERO,
+            stall_after: Duration::ZERO,
         })
     }
 
@@ -777,5 +872,110 @@ mod tests {
             .unwrap()
             .contains("\"OFFLINE\""));
         assert_eq!(agent.config.source(), "mes-edge/press3");
+    }
+
+    fn local() -> Local {
+        Local {
+            plc: Plc::new(1_000, 0),
+            starts: 0,
+            unplugged: false,
+        }
+    }
+
+    fn agent_with(dir: &std::path::Path, heartbeat: Duration, stall_after: Duration) -> Agent {
+        Agent::new(Config {
+            cell: CELL.into(),
+            state_file: dir.join("edge-state.txt"),
+            progress_interval: Duration::ZERO,
+            heartbeat,
+            stall_after,
+        })
+    }
+
+    #[test]
+    fn every_connection_has_its_own_session_and_a_fresh_will() {
+        let dir = temp_dir("session");
+        let mut agent = agent(&dir);
+        let will = agent.begin_session();
+        let first = agent.session().to_string();
+        assert!(first.starts_with("press3-"), "{first}");
+        let data = crate::json::parse(std::str::from_utf8(&will.payload).unwrap())
+            .unwrap()
+            .get("data")
+            .unwrap()
+            .clone();
+        assert_eq!(
+            (text(&data, "state"), text(&data, "session")),
+            ("OFFLINE".into(), first.clone())
+        );
+
+        std::thread::sleep(Duration::from_millis(5)); // timestamps have millisecond resolution
+        let again = agent.begin_session(); // the next connection
+        assert_ne!(agent.session(), first);
+        assert_ne!(
+            again.payload, will.payload,
+            "the will is built again, not reused"
+        );
+
+        agent.connected();
+        let mut bus = Recorder::default();
+        agent.tick(&mut bus, &mut local()).unwrap();
+        let states = data_of(&bus.take(), "/state/status");
+        assert_eq!(text(&states[0], "session"), agent.session());
+    }
+
+    #[test]
+    fn an_unchanged_state_is_published_again_on_the_heartbeat() {
+        let dir = temp_dir("heartbeat");
+        let mut agent = agent_with(&dir, Duration::from_millis(30), Duration::ZERO);
+        let (mut bus, mut machine) = (Recorder::default(), local());
+        agent.tick(&mut bus, &mut machine).unwrap();
+        agent.tick(&mut bus, &mut machine).unwrap();
+        let first = data_of(&bus.take(), "/state/status");
+        assert_eq!(first.len(), 1, "within the heartbeat only changes are sent");
+
+        std::thread::sleep(Duration::from_millis(40));
+        agent.tick(&mut bus, &mut machine).unwrap();
+        let again = data_of(&bus.take(), "/state/status");
+        assert_eq!(again.len(), 1, "the heartbeat repeats the state");
+        assert_eq!(
+            (text(&again[0], "state"), text(&again[0], "since")),
+            (text(&first[0], "state"), text(&first[0], "since")),
+            "the same state since the same time, only the message is newer"
+        );
+    }
+
+    #[test]
+    fn frozen_counters_make_the_cell_offline_until_they_move() {
+        let dir = temp_dir("frozen");
+        let mut agent = agent_with(&dir, Duration::ZERO, Duration::from_millis(30));
+        let (mut bus, mut machine) = (Recorder::default(), local());
+        agent.on_message(&job_message("mo00000001-0010", "5"));
+        agent.tick(&mut bus, &mut machine).unwrap(); // starts the job
+        agent.tick(&mut bus, &mut machine).unwrap(); // RUNNING, counters noted
+        assert_eq!(
+            text(&data_of(&bus.take(), "/state/status")[0], "state"),
+            "RUNNING"
+        );
+
+        std::thread::sleep(Duration::from_millis(40)); // the PLC says RUNNING, but nothing moves
+        agent.tick(&mut bus, &mut machine).unwrap();
+        agent.tick(&mut bus, &mut machine).unwrap();
+        let states = data_of(&bus.take(), "/state/status");
+        assert_eq!(states.len(), 1, "OFFLINE is published once");
+        assert_eq!(text(&states[0], "state"), "OFFLINE");
+
+        machine.plc.advance(1_000); // a part is made: the values are live again
+        agent.tick(&mut bus, &mut machine).unwrap();
+        let published = bus.take();
+        assert_eq!(
+            text(&data_of(&published, "/state/status")[0], "state"),
+            "RUNNING"
+        );
+        assert_eq!(
+            text(&data_of(&published, "/state/job")[0], "good_quantity"),
+            "1"
+        );
+        assert_eq!(machine.starts, 1, "the job was never started again");
     }
 }

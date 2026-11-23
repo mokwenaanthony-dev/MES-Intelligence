@@ -1,0 +1,18 @@
+{
+  "schema": "operation-performance/v1",
+  "event_id": "press3-2026-06-01T10:15:00Z-0001",
+  "timestamp": "2026-06-01T10:15:00+02:00",
+  "source": "mes-intelligence",
+  "data": {
+    "order": "MO00000001",
+    "operation_number": 10,
+    "posting_date": "2026-06-01",
+    "yield_quantity": "100",
+    "scrap_quantity": "0",
+    "activities": {
+      "MACH": "10.5",
+      "LAB": "10"
+    },
+    "final": true
+  }
+}

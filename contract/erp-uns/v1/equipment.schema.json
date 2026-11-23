@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mokwenaanthony-dev/ERP-Intelligence/contract/uns/v1/equipment.schema.json",
+  "title": "equipment/v1",
+  "description": "What a cell is. Published by the ERP, retained at <cell path>/definition/equipment; an empty payload clears it when the work centre is deleted.",
+  "allOf": [{"$ref": "envelope.schema.json"}],
+  "properties": {
+    "schema": {"const": "equipment/v1"},
+    "data": {
+      "type": "object",
+      "required": ["company_code", "plant", "area", "line", "work_center", "name", "isa95_level",
+                   "cost_center", "activity_types", "is_active", "uns_path"],
+      "properties": {
+        "company_code": {"$ref": "envelope.schema.json#/$defs/code"},
+        "plant": {"$ref": "envelope.schema.json#/$defs/code"},
+        "area": {"$ref": "envelope.schema.json#/$defs/code"},
+        "line": {"$ref": "envelope.schema.json#/$defs/code"},
+        "work_center": {"$ref": "envelope.schema.json#/$defs/code"},
+        "name": {"type": "string", "minLength": 1, "maxLength": 100},
+        "isa95_level": {"enum": ["WorkCell", "Unit", "StorageUnit"]},
+        "cost_center": {"$ref": "envelope.schema.json#/$defs/code"},
+        "activity_types": {
+          "description": "The activities that may be recorded at the cell, sorted.",
+          "type": "array",
+          "items": {"$ref": "envelope.schema.json#/$defs/code"},
+          "uniqueItems": true
+        },
+        "is_active": {"type": "boolean"},
+        "uns_path": {
+          "description": "<enterprise>/<site>/<area>/<line>/<cell>, lower case.",
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*(/[a-z0-9][a-z0-9-]*){4}$"
+        }
+      }
+    }
+  }
+}

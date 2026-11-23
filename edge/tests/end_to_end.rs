@@ -102,6 +102,8 @@ fn scenario(url: &str) {
             cell: agent_cell,
             state_file: dir.join("state.txt"),
             progress_interval: Duration::from_millis(100),
+            heartbeat: Duration::from_secs(60),
+            stall_after: Duration::from_secs(60),
         });
         let mut machine = ModbusMachine::new(&plc_address, 1);
         agent::run(

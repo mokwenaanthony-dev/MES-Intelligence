@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mokwenaanthony-dev/ERP-Intelligence/contract/uns/v1/confirmation-result.schema.json",
+  "title": "confirmation-result/v1",
+  "description": "The ERP's answer to every operation-performance event, at <enterprise>/<site>/erp/events/confirmation-result (not retained). A repeated event gets the same answer as the first time, with replayed true. The event_id is null only when the message it answers was not a readable envelope with an event_id: such a message cannot be retried, so the answer is for the logs.",
+  "allOf": [
+    {"$ref": "envelope.schema.json"},
+    {
+      "if": {"properties": {"data": {"properties": {"status": {"const": "POSTED"}}}}},
+      "then": {
+        "required": ["event_id"],
+        "properties": {
+          "event_id": {"type": "string", "minLength": 1},
+          "data": {
+            "properties": {
+              "event_id": {"type": "string", "minLength": 1},
+              "order": {"$ref": "envelope.schema.json#/$defs/documentNumber"},
+              "confirmation_number": {"type": "string", "minLength": 1},
+              "reason": {"type": "null"}
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "data": {
+            "properties": {
+              "confirmation_number": {"type": "null"},
+              "journal_entry": {"type": "null"},
+              "reason": {"type": "string", "minLength": 1},
+              "replayed": {"const": false}
+            }
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "schema": {"const": "confirmation-result/v1"},
+    "data": {
+      "type": "object",
+      "required": ["event_id", "status", "order", "confirmation_number", "journal_entry", "reason", "replayed"],
+      "properties": {
+        "event_id": {"type": ["string", "null"], "maxLength": 64},
+        "status": {"enum": ["POSTED", "REJECTED"]},
+        "order": {"type": ["string", "null"]},
+        "confirmation_number": {"type": ["string", "null"], "maxLength": 20},
+        "journal_entry": {"type": ["string", "null"], "maxLength": 20},
+        "reason": {"description": "The business rule's message when REJECTED.", "type": ["string", "null"]},
+        "replayed": {"description": "True when this answers a repeat of an event already posted.", "type": "boolean"}
+      }
+    }
+  }
+}

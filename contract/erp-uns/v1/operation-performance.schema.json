@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mokwenaanthony-dev/ERP-Intelligence/contract/uns/v1/operation-performance.schema.json",
+  "title": "operation-performance/v1",
+  "description": "Work done on an operation. Published by the MES as an event (not retained) at <cell path>/events/operation-performance. The ERP posts it as a confirmation with the event_id as the idempotency key and answers with confirmation-result/v1.",
+  "allOf": [{"$ref": "envelope.schema.json"}, {"$ref": "envelope.schema.json#/$defs/event"}],
+  "properties": {
+    "schema": {"const": "operation-performance/v1"},
+    "data": {
+      "type": "object",
+      "required": ["order", "operation_number", "posting_date", "yield_quantity"],
+      "properties": {
+        "order": {"$ref": "envelope.schema.json#/$defs/documentNumber"},
+        "operation_number": {"$ref": "envelope.schema.json#/$defs/operationNumber"},
+        "posting_date": {"$ref": "envelope.schema.json#/$defs/date"},
+        "yield_quantity": {"$ref": "envelope.schema.json#/$defs/quantity"},
+        "scrap_quantity": {"$ref": "envelope.schema.json#/$defs/quantity", "default": "0"},
+        "activities": {
+          "description": "Actual quantity per activity type. May be omitted: the ERP then derives it from the plan.",
+          "type": "object",
+          "propertyNames": {"$ref": "envelope.schema.json#/$defs/code"},
+          "additionalProperties": {"$ref": "envelope.schema.json#/$defs/quantity"}
+        },
+        "final": {"description": "The last confirmation of the operation.", "type": "boolean", "default": false}
+      }
+    }
+  }
+}
